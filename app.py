@@ -1,4 +1,5 @@
 # ===== IMPORT LIBRARY =====
+import os
 import sqlite3
 from datetime import datetime
 import hashlib
@@ -7,6 +8,9 @@ import barcode
 from barcode.writer import ImageWriter
 from escpos.printer import Serial
 from PIL import Image
+
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 # ===== KONEKSI DATABASE =====
 conn = sqlite3.connect("logistik.db")
@@ -76,6 +80,7 @@ def log_user_activity(user, aktivitas):
 
 # ===== FUNGSI TAMBAH USER (ADMIN) =====
 def tambah_user():
+    clear_screen()
     username = input("Username baru: ").strip()
     password = input("Password: ").strip()
     role = input("Role (admin/staff): ").strip()
@@ -90,17 +95,30 @@ def tambah_user():
 
 # ===== FUNGSI TAMBAH BARANG =====
 def tambah_barang():
-    nama = input("Nama Barang: ")
-    satuan = input("Satuan (pcs/box/kg/lainnya): ")
-    lokasi = input("Lokasi Gudang: ")
-    barcode_kode = input("Kode Barcode (unik): ")
-    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode) VALUES (?, ?, ?, ?)", (nama, satuan, lokasi, barcode_kode))
+    clear_screen()
+    nama = input("Nama Barang: ").strip()
+    satuan = input("Satuan (pcs/box/kg/lainnya): ").strip()
+    lokasi = input("Lokasi Gudang: ").strip()
+    
+    while True:
+        barcode_kode = input("Kode Barcode (unik): ").strip()
+        # cek apakah barcode sudah ada
+        c.execute("SELECT id FROM Barang WHERE barcode=?", (barcode_kode,))
+        if c.fetchone():
+            print(f"Kode barcode '{barcode_kode}' sudah ada! Masukkan kode lain.\n")
+        else:
+            break
+
+    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode) VALUES (?, ?, ?, ?)",
+              (nama, satuan, lokasi, barcode_kode))
     conn.commit()
-    print(f"Barang '{nama}' berhasil ditambahkan.\n")
+    print(f"Barang '{nama}' berhasil ditambahkan dengan barcode '{barcode_kode}'.\n")
     log_user_activity(current_user, f"Tambah barang '{nama}' (barcode {barcode_kode})")
+
 
 # ===== FUNGSI INPUT TRANSAKSI =====
 def input_transaksi():
+    clear_screen()
     barang_id = int(input("ID Barang: "))
     tipe = input("Tipe Transaksi (MASUK/KELUAR): ").upper()
     jumlah = int(input("Jumlah: "))
@@ -116,6 +134,7 @@ def input_transaksi():
 
 # ===== FUNGSI HAPUS BARANG =====
 def hapus_barang():
+    clear_screen()
     list_barang()
     barang_id = int(input("Masukkan ID barang yang ingin dihapus: "))
     c.execute("SELECT nama FROM Barang WHERE id=?", (barang_id,))
@@ -137,6 +156,7 @@ def hapus_barang():
 
 # ===== FUNGSI LIST BARANG =====
 def list_barang():
+    clear_screen()
     print("\nDaftar Barang:")
     print(f"{'ID':3} | {'Nama':20} | {'Satuan':6} | {'Lokasi':10} | {'Barcode'}")
     print("-"*70)
@@ -147,6 +167,7 @@ def list_barang():
 
 # ===== FUNGSI HISTORY TRANSAKSI =====
 def history_transaksi():
+    clear_screen()
     print("===== History Transaksi =====")
     print("1. Semua Barang")
     print("2. Berdasarkan Barang")
@@ -193,6 +214,8 @@ def tampil_user_activity():
 
 # ===== LOGIN =====
 current_user, current_role = login()
+
+
 
 # ===== MENU INTERAKTIF =====
 def main_menu():
