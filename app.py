@@ -81,6 +81,71 @@ def list_barang():
         print(f"{id_:3} | {nama:20} | {satuan:6} | {lokasi}")
     print("")
 
+# ===== Fungsi hapus barang =====
+def hapus_barang():
+    list_barang()  # tampilkan daftar barang dulu
+    barang_id = int(input("Masukkan ID barang yang ingin dihapus: "))
+    
+    # cek apakah barang ada
+    c.execute("SELECT nama FROM Barang WHERE id=?", (barang_id,))
+    barang = c.fetchone()
+    if not barang:
+        print("Barang tidak ditemukan.\n")
+        return
+    nama = barang[0]
+    
+    # hitung saldo barang
+    c.execute("SELECT SUM(CASE WHEN tipe='MASUK' THEN jumlah ELSE -jumlah END) FROM Transaksi WHERE barang_id=?", (barang_id,))
+    saldo = c.fetchone()[0] or 0
+    
+    if saldo != 0:
+        print(f"Barang '{nama}' tidak bisa dihapus karena saldo masih {saldo}.\n")
+        return
+    
+    # hapus transaksi terkait dulu (opsional, tergantung kebijakan)
+    c.execute("DELETE FROM Transaksi WHERE barang_id=?", (barang_id,))
+    # hapus barang
+    c.execute("DELETE FROM Barang WHERE id=?", (barang_id,))
+    conn.commit()
+    print(f"Barang '{nama}' berhasil dihapus.\n")
+
+# ===== Fungsi tampil history transaksi =====
+def history_transaksi():
+    print("===== History Transaksi =====")
+    print("1. Semua Barang")
+    print("2. Berdasarkan Barang")
+    choice = input("Pilih opsi (1/2): ").strip()
+
+    if choice == "1":
+        # Tampilkan semua transaksi
+        c.execute('''SELECT t.id, b.nama, t.tanggal, t.tipe, t.jumlah, t.keterangan
+                     FROM Transaksi t
+                     JOIN Barang b ON t.barang_id = b.id
+                     ORDER BY t.tanggal''')
+    elif choice == "2":
+        list_barang()
+        barang_id = int(input("Masukkan ID barang: "))
+        c.execute('''SELECT t.id, b.nama, t.tanggal, t.tipe, t.jumlah, t.keterangan
+                     FROM Transaksi t
+                     JOIN Barang b ON t.barang_id = b.id
+                     WHERE t.barang_id = ?
+                     ORDER BY t.tanggal''', (barang_id,))
+    else:
+        print("Opsi tidak valid.\n")
+        return
+
+    rows = c.fetchall()
+    if not rows:
+        print("Tidak ada transaksi.\n")
+        return
+
+    print(f"{'ID':3} | {'Barang':20} | {'Tanggal':19} | {'Tipe':6} | {'Jumlah':6} | Keterangan")
+    print("-"*80)
+    for tid, nama, tanggal, tipe, jumlah, keterangan in rows:
+        print(f"{tid:3} | {nama:20} | {tanggal:19} | {tipe:6} | {jumlah:6} | {keterangan}")
+    print("")
+
+
 # ===== Menu Interaktif =====
 def main_menu():
     while True:
@@ -90,6 +155,8 @@ def main_menu():
         print("3. Lihat Bin Card")
         print("4. List Barang")
         print("5. Keluar")
+        print("7. Hapus Barang")  # misal nomor 7
+        print("8. History Transaksi")
         choice = input("Pilih opsi (1-5): ")
         print("")
         if choice == "1":
@@ -100,6 +167,10 @@ def main_menu():
             tampil_bin_card()
         elif choice == "4":
             list_barang()
+        elif choice == "7":
+            hapus_barang()
+        elif choice == "8":
+            history_transaksi()
         elif choice == "5":
             print("Keluar dari program.")
             break
