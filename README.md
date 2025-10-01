@@ -1,52 +1,93 @@
-# LogStock
+# LogStock - Sistem Manajemen Logistik
 
-**LogStock** adalah aplikasi logistik sederhana untuk menggantikan penggunaan **bin card** secara manual. Sistem ini memungkinkan pencatatan stok masuk, keluar, dan saldo barang secara digital.
+LogStock adalah aplikasi terminal berbasis Python untuk **manajemen stok barang** yang menggantikan bin card manual. Cocok untuk gudang kecil atau menengah.
 
-## Fitur
+---
 
-- Tambah barang baru dengan detail nama, satuan, dan lokasi.
-- Input transaksi **MASUK** dan **KELUAR** barang.
-- Menampilkan **bin card digital** per barang beserta riwayat transaksi dan saldo otomatis.
-- List semua barang yang terdaftar.
-- Menu interaktif di terminal, mudah digunakan.
+## Fitur Utama
 
-## Teknologi
+### 1. Manajemen User
+- Login dengan username & password
+- Role `admin` dan `staff`
+  - **Admin**: tambah/hapus barang, tambah user, lihat aktivitas user
+  - **Staff**: input transaksi, cek stok (barcode sementara disable)
+- Aktivitas user dicatat otomatis
 
-- Python 3
-- SQLite (database lokal)
+### 2. Barang & Stok
+- Tambah barang dengan nama, satuan, lokasi
+- Hapus barang **hanya jika saldo = 0**
+- Input transaksi MASUK/KELUAR
+- History transaksi untuk semua barang atau per barang
+
+### 3. Barcode & Stiker (sementara disable)
+- Generate barcode Code128 untuk setiap barang
+- Scan barcode untuk cek stok (disable sementara)
+- Cetak stiker ke printer Bluetooth (disable sementara)
+
+### 4. Audit Trail
+- Setiap aksi user dicatat
+- Bisa dilihat melalui menu **Aktivitas User**
+
+---
 
 ## Instalasi
 
-1. Clone repository ini:
-
+1. Clone repository:
 ```bash
 git clone https://github.com/drprawedha/logstock.git
 cd logstock
 ```
-2. Jalankan script Python:
-
-```bash
-python3 logstock.py
+2. Buat virtual environment:
 ```
-Catatan: Pastikan Python 3 sudah terpasang di sistem Anda.
-
-## Cara Penggunaan
-Jalankan program: 
-
-```bash
-python3 logstock.py.
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-Pilih opsi dari menu:
+3. Install dependency:
+```
+pip install -r requirements.txt
+```
 
-1 : Tambah Barang
+4. Jalankan aplikasi:
+```
+python3 app.py
+```
+### Database
 
-2 : Input Transaksi
+Database SQLite: logistik.db
 
-3 : Lihat Bin Card
+### Tabel utama:
 
-4 : List Barang
+- User → username, password (hash), role
+- Barang → nama, satuan, lokasi, barcode
+- Transaksi → barang_id, tanggal, tipe, jumlah, keterangan
+- UserActivity → user, tanggal, aktivitas
 
-5 : Keluar
+Catatan: Jika database lama belum ada kolom barcode:
+```
+ALTER TABLE Barang ADD COLUMN barcode TEXT UNIQUE;
+```
+### Cara Membuat Admin
 
-Ikuti instruksi di layar untuk memasukkan data.
+Jalankan Python shell atau buat script create_admin.py
+```
+import sqlite3, hashlib
+
+DB = "logistik.db"
+conn = sqlite3.connect(DB)
+c = conn.cursor()
+
+username = "admin"
+password = "AdminPass123!"
+pw_hash = hashlib.sha256(password.encode()).hexdigest()
+c.execute("INSERT INTO User (username, password, role) VALUES (?, ?, 'admin')", (username, pw_hash))
+conn.commit()
+conn.close()
+```
+
+Login menggunakan username/password tersebut.
+
+## Catatan
+- Barcode & stiker untuk sementara disable.
+- Pastikan backup database sebelum melakukan migrasi.
+- Password disimpan dalam hash SHA-256 untuk keamanan.
