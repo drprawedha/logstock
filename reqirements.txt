@@ -1,0 +1,10 @@
+# SQLite sudah bawaan Python
+# Library untuk barcode (Code128) - opsional sementara
+python-barcode==0.14.0
+Pillow==10.0.0
+
+# Library untuk printer ESC/POS - opsional sementara
+python-escpos==3.0.0
+
+# (opsional) jika ingin menggunakan virtualenv dengan peringatan warnings terbaru
+setuptools<81
