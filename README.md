@@ -91,3 +91,23 @@ Login menggunakan username/password tersebut.
 - Barcode & stiker untuk sementara disable.
 - Pastikan backup database sebelum melakukan migrasi.
 - Password disimpan dalam hash SHA-256 untuk keamanan.
+
+# 📜 Changelog
+🔹 Versi 1 (v1)
+- Login user (admin & staff).
+- Tambah barang (manual, input barcode sendiri).
+- Input transaksi MASUK/KELUAR (menggunakan ID barang).
+- History transaksi.
+- Audit aktivitas user.
+- Hapus barang = hard delete (data hilang permanen).
+
+🔹 Versi 2 (v2)
+
+Peningkatan & Fitur Baru:
+- Soft Delete Barang → barang tidak benar-benar hilang, hanya ditandai is_deleted=1.
+- Validasi Barcode Unik → tidak bisa input barcode yang sudah ada.
+- Pencarian Barang Saat Tambah Barang → bisa cari barang berdasarkan nama/barcode sebelum menambah baru.
+- Pencarian Barang Saat Input Transaksi → user bisa ketik nama barang, sistem menampilkan opsi ID barang yang cocok.
+- Tracking Stok Otomatis → stok dihitung berdasarkan transaksi (MASUK - KELUAR).
+- Audit Log User lebih detail, termasuk pencatatan setiap transaksi.
+- Clear Screen Otomatis saat berpindah menu agar tampilan lebih bersih.
