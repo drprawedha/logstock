@@ -58,6 +58,15 @@ conn.commit()
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+def safe_input(prompt: str):
+    """Input dengan opsi batal. Return None kalau user ketik batal"""
+    val = input(prompt).strip()
+    if val.lower() == "batal":
+        print("Proses dibatalkan.\n")
+        return None
+    return val
+
+
 # ===== FUNGSI LOGIN =====
 def login():
     while True:
@@ -95,25 +104,63 @@ def tambah_user():
 
 # ===== FUNGSI TAMBAH BARANG =====
 def tambah_barang():
-    clear_screen()
-    nama = input("Nama Barang: ").strip()
-    satuan = input("Satuan (pcs/box/kg/lainnya): ").strip()
-    lokasi = input("Lokasi Gudang: ").strip()
+    print("=== Tambah Barang Baru ===")
     
+    # Cari barang dulu (opsional)
+    pilihan = safe_input("Apakah ingin mencari barang dulu? (y/n atau 'batal'): ")
+    if pilihan is None:
+        return
+
+    if pilihan.lower() == "y":
+        keyword = safe_input("Masukkan kata kunci nama/barcode (atau 'batal'): ")
+        if keyword is None:
+            return
+
+        c.execute("""
+            SELECT id, nama, satuan, lokasi, barcode 
+            FROM Barang 
+            WHERE is_deleted=0 AND (nama LIKE ? OR barcode LIKE ?)
+            ORDER BY nama ASC
+        """, (f"%{keyword}%", f"%{keyword}%"))
+        hasil = c.fetchall()
+        if hasil:
+            print("\n=== Hasil Pencarian Barang ===")
+            for r in hasil:
+                print(f"[{r[0]}] {r[1]} | {r[2]} | Lokasi: {r[3]} | Barcode: {r[4]}")
+            kembali = safe_input("Apakah ingin batal tambah barang? (y/n): ")
+            if kembali is None or kembali.lower() == "y":
+                return
+        else:
+            print("Tidak ada barang ditemukan.\n")
+
+    # --- Input data barang ---
+    nama = safe_input("Nama Barang: ")
+    if nama is None: return
+
+    satuan = safe_input("Satuan (pcs/box/kg/lainnya): ")
+    if satuan is None: return
+
+    lokasi = safe_input("Lokasi Gudang: ")
+    if lokasi is None: return
+    
+    # Barcode dengan validasi unik
     while True:
-        barcode_kode = input("Kode Barcode (unik): ").strip()
-        # cek apakah barcode sudah ada
-        c.execute("SELECT id FROM Barang WHERE barcode=?", (barcode_kode,))
+        barcode_kode = safe_input("Kode Barcode (unik): ")
+        if barcode_kode is None:
+            return
+        c.execute("SELECT id FROM Barang WHERE barcode=? AND is_deleted=0", (barcode_kode,))
         if c.fetchone():
-            print(f"Kode barcode '{barcode_kode}' sudah ada! Masukkan kode lain.\n")
+            print(f"⚠️ Kode barcode '{barcode_kode}' sudah ada! Masukkan kode lain.\n")
         else:
             break
 
-    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode) VALUES (?, ?, ?, ?)",
+    # Simpan ke database
+    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode, is_deleted) VALUES (?, ?, ?, ?, 0)",
               (nama, satuan, lokasi, barcode_kode))
     conn.commit()
-    print(f"Barang '{nama}' berhasil ditambahkan dengan barcode '{barcode_kode}'.\n")
+    print(f"✅ Barang '{nama}' berhasil ditambahkan dengan barcode '{barcode_kode}'.\n")
     log_user_activity(current_user, f"Tambah barang '{nama}' (barcode {barcode_kode})")
+
 
 
 # ===== FUNGSI INPUT TRANSAKSI =====
