@@ -135,35 +135,42 @@ def input_transaksi():
 # ===== FUNGSI HAPUS BARANG =====
 def hapus_barang():
     clear_screen()
+    print("===== Hapus Barang (Soft Delete) =====")
     list_barang()
-    barang_id = int(input("Masukkan ID barang yang ingin dihapus: "))
-    c.execute("SELECT nama FROM Barang WHERE id=?", (barang_id,))
-    barang = c.fetchone()
-    if not barang:
-        print("Barang tidak ditemukan.\n")
+    barang_id = input("Masukkan ID barang yang ingin dihapus: ").strip()
+    if not barang_id.isdigit():
+        print("ID tidak valid.\n")
         return
-    nama = barang[0]
+
+    # cek saldo dulu
     c.execute("SELECT SUM(CASE WHEN tipe='MASUK' THEN jumlah ELSE -jumlah END) FROM Transaksi WHERE barang_id=?", (barang_id,))
-    saldo = c.fetchone()[0] or 0
+    saldo = c.fetchone()[0]
+    if saldo is None:
+        saldo = 0
+
     if saldo != 0:
-        print(f"Barang '{nama}' tidak bisa dihapus karena saldo masih {saldo}.\n")
+        print("Barang tidak bisa dihapus, masih ada stok!\n")
         return
-    c.execute("DELETE FROM Transaksi WHERE barang_id=?", (barang_id,))
-    c.execute("DELETE FROM Barang WHERE id=?", (barang_id,))
+
+    # update is_deleted jadi 1 (soft delete)
+    c.execute("UPDATE Barang SET is_deleted=1 WHERE id=?", (barang_id,))
     conn.commit()
-    print(f"Barang '{nama}' berhasil dihapus.\n")
-    log_user_activity(current_user, f"Hapus barang '{nama}'")
+    print(f"Barang dengan ID {barang_id} berhasil dihapus (soft delete).\n")
+    log_user_activity(current_user, f"Hapus barang (soft delete) id={barang_id}")
+
 
 # ===== FUNGSI LIST BARANG =====
 def list_barang():
-    clear_screen()
-    print("\nDaftar Barang:")
-    print(f"{'ID':3} | {'Nama':20} | {'Satuan':6} | {'Lokasi':10} | {'Barcode'}")
-    print("-"*70)
-    c.execute("SELECT id, nama, satuan, lokasi, barcode FROM Barang")
-    for id_, nama, satuan, lokasi, barcode_ in c.fetchall():
-        print(f"{id_:3} | {nama:20} | {satuan:6} | {lokasi:10} | {barcode_}")
+    c.execute("SELECT id, nama, satuan, lokasi, barcode FROM Barang WHERE is_deleted=0")
+    rows = c.fetchall()
+    if not rows:
+        print("Tidak ada barang yang aktif.\n")
+    else:
+        print("=== Daftar Barang Aktif ===")
+        for r in rows:
+            print(f"[{r[0]}] {r[1]} | {r[2]} | Lokasi: {r[3]} | Barcode: {r[4]}")
     print("")
+
 
 # ===== FUNGSI HISTORY TRANSAKSI =====
 def history_transaksi():
