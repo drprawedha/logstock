@@ -3,10 +3,9 @@ import os
 import sqlite3
 from datetime import datetime
 import hashlib
-# Barcode dan printer dibiarkan import, tapi fungsinya tidak dipanggil
+# Barcode dan printer (print fisik HOLD dulu, hanya simpan ke file)
 import barcode
 from barcode.writer import ImageWriter
-from escpos.printer import Serial
 from PIL import Image
 
 def clear_screen():
@@ -31,7 +30,9 @@ c.execute('''CREATE TABLE IF NOT EXISTS Barang (
     nama TEXT NOT NULL,
     satuan TEXT,
     lokasi TEXT,
-    barcode TEXT UNIQUE
+    barcode TEXT UNIQUE,
+    stok INTEGER DEFAULT 0,
+    is_deleted INTEGER DEFAULT 0
 )''')
 
 # Transaksi
@@ -65,7 +66,6 @@ def safe_input(prompt: str):
         print("Proses dibatalkan.\n")
         return None
     return val
-
 
 # ===== FUNGSI LOGIN =====
 def login():
@@ -102,38 +102,11 @@ def tambah_user():
     except sqlite3.IntegrityError:
         print("Username sudah ada.\n")
 
-# ===== FUNGSI TAMBAH BARANG =====
+# ===== FUNGSI TAMBAH BARANG + GENERATE BARCODE FILE =====
 def tambah_barang():
-    print("=== Tambah Barang Baru ===")
-    
-    # Cari barang dulu (opsional)
-    pilihan = safe_input("Apakah ingin mencari barang dulu? (y/n atau 'batal'): ")
-    if pilihan is None:
-        return
+    clear_screen()
+    print("=== Tambah Barang Baru (Barcode PNG disimpan ke folder barcodes/) ===")
 
-    if pilihan.lower() == "y":
-        keyword = safe_input("Masukkan kata kunci nama/barcode (atau 'batal'): ")
-        if keyword is None:
-            return
-
-        c.execute("""
-            SELECT id, nama, satuan, lokasi, barcode 
-            FROM Barang 
-            WHERE is_deleted=0 AND (nama LIKE ? OR barcode LIKE ?)
-            ORDER BY nama ASC
-        """, (f"%{keyword}%", f"%{keyword}%"))
-        hasil = c.fetchall()
-        if hasil:
-            print("\n=== Hasil Pencarian Barang ===")
-            for r in hasil:
-                print(f"[{r[0]}] {r[1]} | {r[2]} | Lokasi: {r[3]} | Barcode: {r[4]}")
-            kembali = safe_input("Apakah ingin batal tambah barang? (y/n): ")
-            if kembali is None or kembali.lower() == "y":
-                return
-        else:
-            print("Tidak ada barang ditemukan.\n")
-
-    # --- Input data barang ---
     nama = safe_input("Nama Barang: ")
     if nama is None: return
 
@@ -142,8 +115,8 @@ def tambah_barang():
 
     lokasi = safe_input("Lokasi Gudang: ")
     if lokasi is None: return
-    
-    # Barcode dengan validasi unik
+
+    # Barcode unik
     while True:
         barcode_kode = safe_input("Kode Barcode (unik): ")
         if barcode_kode is None:
@@ -155,31 +128,96 @@ def tambah_barang():
             break
 
     # Simpan ke database
-    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode, is_deleted) VALUES (?, ?, ?, ?, 0)",
+    c.execute("INSERT INTO Barang (nama, satuan, lokasi, barcode, stok, is_deleted) VALUES (?, ?, ?, ?, 0, 0)",
               (nama, satuan, lokasi, barcode_kode))
     conn.commit()
     print(f"✅ Barang '{nama}' berhasil ditambahkan dengan barcode '{barcode_kode}'.\n")
+
+    # Generate barcode image
+    if not os.path.exists("barcodes"):
+        os.makedirs("barcodes")
+    CODE128 = barcode.get_barcode_class('code128')
+    filename = os.path.join("barcodes", f"barcode_{barcode_kode}")
+    code = CODE128(barcode_kode, writer=ImageWriter())
+    full_path = code.save(filename)
+    print(f"📄 Barcode disimpan di file: {full_path}\n")
+
     log_user_activity(current_user, f"Tambah barang '{nama}' (barcode {barcode_kode})")
-
-
 
 # ===== FUNGSI INPUT TRANSAKSI =====
 def input_transaksi():
     clear_screen()
-    barang_id = int(input("ID Barang: "))
+    # Cari barang berdasarkan nama
+    keyword = safe_input("Cari Nama Barang: ")
+    if keyword is None: return
+    
+    c.execute("""
+        SELECT id, nama, satuan, lokasi, barcode, stok 
+        FROM Barang 
+        WHERE nama LIKE ? AND is_deleted=0
+    """, (f"%{keyword}%",))
+    results = c.fetchall()
+
+    if not results:
+        print("❌ Barang tidak ditemukan.\n")
+        return
+
+    print("\nHasil pencarian barang:")
+    for row in results:
+        print(f"[{row[0]}] {row[1]} | Satuan: {row[2]} | Lokasi: {row[3]} | Stok: {row[5]} | Barcode: {row[4]}")
+
+    try:
+        barang_id = int(input("\nPilih ID Barang: "))
+    except ValueError:
+        print("❌ Input tidak valid.\n")
+        return
+
+    # Cek apakah ID valid
+    c.execute("SELECT nama, stok FROM Barang WHERE id=? AND is_deleted=0", (barang_id,))
+    barang = c.fetchone()
+    if not barang:
+        print("❌ ID Barang tidak valid.\n")
+        return
+    
+    nama_barang, stok_sekarang = barang
+
+    # Input detail transaksi
     tipe = input("Tipe Transaksi (MASUK/KELUAR): ").upper()
-    jumlah = int(input("Jumlah: "))
+    if tipe not in ["MASUK", "KELUAR"]:
+        print("❌ Tipe transaksi salah.\n")
+        return
+
+    try:
+        jumlah = int(input("Jumlah: "))
+    except ValueError:
+        print("❌ Jumlah harus angka.\n")
+        return
+
+    if tipe == "KELUAR" and jumlah > stok_sekarang:
+        print("❌ Stok tidak cukup.\n")
+        return
+
     keterangan = input("Keterangan (opsional): ")
     tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute("INSERT INTO Transaksi (barang_id, tanggal, tipe, jumlah, keterangan) VALUES (?, ?, ?, ?, ?)",
-              (barang_id, tanggal, tipe, jumlah, keterangan))
+
+    # Simpan ke tabel Transaksi
+    c.execute(
+        "INSERT INTO Transaksi (barang_id, tanggal, tipe, jumlah, keterangan) VALUES (?, ?, ?, ?, ?)",
+        (barang_id, tanggal, tipe, jumlah, keterangan)
+    )
+
+    # Update stok barang
+    if tipe == "MASUK":
+        c.execute("UPDATE Barang SET stok = stok + ? WHERE id=?", (jumlah, barang_id))
+    elif tipe == "KELUAR":
+        c.execute("UPDATE Barang SET stok = stok - ? WHERE id=?", (jumlah, barang_id))
+
     conn.commit()
-    c.execute("SELECT nama FROM Barang WHERE id=?", (barang_id,))
-    nama_barang = c.fetchone()[0]
-    print(f"Transaksi {tipe} {jumlah} unit '{nama_barang}' berhasil dicatat.\n")
+    print(f"✅ Transaksi {tipe} {jumlah} unit '{nama_barang}' berhasil dicatat.\n")
     log_user_activity(current_user, f"Transaksi {tipe} {jumlah} '{nama_barang}' ({keterangan})")
 
-# ===== FUNGSI HAPUS BARANG =====
+
+# ===== FUNGSI HAPUS BARANG (SOFT DELETE) =====
 def hapus_barang():
     clear_screen()
     print("===== Hapus Barang (Soft Delete) =====")
@@ -189,35 +227,28 @@ def hapus_barang():
         print("ID tidak valid.\n")
         return
 
-    # cek saldo dulu
-    c.execute("SELECT SUM(CASE WHEN tipe='MASUK' THEN jumlah ELSE -jumlah END) FROM Transaksi WHERE barang_id=?", (barang_id,))
-    saldo = c.fetchone()[0]
-    if saldo is None:
-        saldo = 0
-
-    if saldo != 0:
-        print("Barang tidak bisa dihapus, masih ada stok!\n")
+    c.execute("SELECT stok FROM Barang WHERE id=?", (barang_id,))
+    stok = c.fetchone()
+    if stok and stok[0] != 0:
+        print("❌ Barang tidak bisa dihapus, masih ada stok!\n")
         return
 
-    # update is_deleted jadi 1 (soft delete)
     c.execute("UPDATE Barang SET is_deleted=1 WHERE id=?", (barang_id,))
     conn.commit()
-    print(f"Barang dengan ID {barang_id} berhasil dihapus (soft delete).\n")
+    print(f"✅ Barang dengan ID {barang_id} berhasil dihapus (soft delete).\n")
     log_user_activity(current_user, f"Hapus barang (soft delete) id={barang_id}")
-
 
 # ===== FUNGSI LIST BARANG =====
 def list_barang():
-    c.execute("SELECT id, nama, satuan, lokasi, barcode FROM Barang WHERE is_deleted=0")
+    c.execute("SELECT id, nama, satuan, lokasi, barcode, stok FROM Barang WHERE is_deleted=0")
     rows = c.fetchall()
     if not rows:
-        print("Tidak ada barang yang aktif.\n")
+        print("Tidak ada barang aktif.\n")
     else:
         print("=== Daftar Barang Aktif ===")
         for r in rows:
-            print(f"[{r[0]}] {r[1]} | {r[2]} | Lokasi: {r[3]} | Barcode: {r[4]}")
+            print(f"[{r[0]}] {r[1]} | {r[2]} | Lokasi: {r[3]} | Barcode: {r[4]} | Stok: {r[5]}")
     print("")
-
 
 # ===== FUNGSI HISTORY TRANSAKSI =====
 def history_transaksi():
@@ -269,12 +300,11 @@ def tampil_user_activity():
 # ===== LOGIN =====
 current_user, current_role = login()
 
-
-
 # ===== MENU INTERAKTIF =====
 def main_menu():
     while True:
-        print("===== LogStock Lengkap (Barcode & Stiker DISABLE) =====")
+        clear_screen()
+        print("===== LogStock v2 (Barcode PNG, Soft Delete, Stok Tracking) =====")
         print("1. Tambah Barang (admin)")
         print("2. Input Transaksi")
         print("3. List Barang")
@@ -305,6 +335,7 @@ def main_menu():
             break
         else:
             print("Opsi tidak valid atau tidak diperbolehkan untuk role Anda.\n")
+        input("\nTekan ENTER untuk kembali ke menu...")
 
 # ===== JALANKAN MENU =====
 if __name__ == "__main__":
