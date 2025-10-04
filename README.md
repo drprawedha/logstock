@@ -93,7 +93,7 @@ Login menggunakan username/password tersebut.
 - Password disimpan dalam hash SHA-256 untuk keamanan.
 
 # 📜 Changelog
-🔹 Versi 1 (v1)
+## 🔹 Versi 1 (v1)
 - Login user (admin & staff).
 - Tambah barang (manual, input barcode sendiri).
 - Input transaksi MASUK/KELUAR (menggunakan ID barang).
@@ -101,9 +101,9 @@ Login menggunakan username/password tersebut.
 - Audit aktivitas user.
 - Hapus barang = hard delete (data hilang permanen).
 
-🔹 Versi 2 (v2)
+##🔹 Versi 2 (v2)
 
-Peningkatan & Fitur Baru:
+### Peningkatan & Fitur Baru:
 - Soft Delete Barang → barang tidak benar-benar hilang, hanya ditandai is_deleted=1.
 - Validasi Barcode Unik → tidak bisa input barcode yang sudah ada.
 - Pencarian Barang Saat Tambah Barang → bisa cari barang berdasarkan nama/barcode sebelum menambah baru.
