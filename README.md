@@ -101,7 +101,7 @@ Login menggunakan username/password tersebut.
 - Audit aktivitas user.
 - Hapus barang = hard delete (data hilang permanen).
 
-##🔹 Versi 2 (v2)
+## 🔹 Versi 2 (v2)
 
 ### Peningkatan & Fitur Baru:
 - Soft Delete Barang → barang tidak benar-benar hilang, hanya ditandai is_deleted=1.
